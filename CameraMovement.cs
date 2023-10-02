@@ -1,3 +1,5 @@
+//put this in 'main camera'
+
 using UnityEngine;
 using System.Collections;
 using UnityEngine.SceneManagement;
