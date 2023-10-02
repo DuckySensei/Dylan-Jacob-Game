@@ -1,3 +1,5 @@
+//Put this in hierarchy 'Character' (Just ur main character)
+
 using UnityEngine;
 using System.Collections;
 using UnityEngine.SceneManagement;
