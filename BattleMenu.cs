@@ -1,3 +1,5 @@
+//put this in hierarchy
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
