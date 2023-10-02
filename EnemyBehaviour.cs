@@ -1,3 +1,5 @@
+//Put this in hierarchy 'enemy'
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
