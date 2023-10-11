@@ -1,17 +1,16 @@
-//put this in hierarchy
-
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+
 
 public class BattleMenu : MonoBehaviour
 {   
     public RectTransform menuTransform;
     public float slideSpeed = 100f;
     public GameObject menu;
+    public GameObject player;
     public GameObject menuButton;
-
     private void Start()
     {
         // Hide the menu when the game starts
@@ -22,7 +21,6 @@ public class BattleMenu : MonoBehaviour
 
     public void ShowMenu()
     {
-        Debug.Log("ShowMenu() called");
         // Show the menu when called
         menu.SetActive(true);
         menuButton.SetActive(true);
@@ -31,7 +29,8 @@ public class BattleMenu : MonoBehaviour
         StartCoroutine(SlideMenuUp());
     }
 
-    IEnumerator SlideMenuUp(){
+    IEnumerator SlideMenuUp()
+    {
         //get the current position of the menu
         Vector3 startPos = menuTransform.localPosition;
         Vector3 endPos = new Vector3(0, 0, 0);
@@ -47,10 +46,6 @@ public class BattleMenu : MonoBehaviour
 
     public void FleeButtonClicked()
     {
-        Debug.Log("Menu button clicked");
-        
-        //pick a random number between 1 and 100
-        int randomNum = Random.Range(1, 101);
-        
+       player.GetComponent<SpriteMovement>().flee();
     }
 }

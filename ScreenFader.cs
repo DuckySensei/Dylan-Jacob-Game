@@ -1,5 +1,3 @@
-//put this in hierarchy 'Main Camera'
-
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
