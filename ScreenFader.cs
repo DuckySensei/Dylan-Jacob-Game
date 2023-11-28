@@ -8,14 +8,21 @@ public class ScreenFader : MonoBehaviour
 
     private void Start()
     {   
-        //turn on the image
-        fadeImage.gameObject.SetActive(true);
-        fadeImage.color = new Color(0f, 0f, 0f, 0f);
-
+        //set the color to white 
+        fadeImage.color = new Color(1f, 1f, 1f, 1f);
+        //fade from white to clear
+        FadeToColor(Color.clear, 1f);
+        clear();
     }
+
+    IEnumerator clear(){
+        yield return new WaitForSeconds(1f);
+        fadeImage.gameObject.SetActive(false);}
     
     public void FadeToColor(Color color, float duration)
     {
+        //turn on screen fader
+        fadeImage.gameObject.SetActive(true);
         StartCoroutine(FadeToColorCoroutine(color, duration));
     }
 

@@ -12,6 +12,7 @@ using System.Linq;
 public class MenuController : MonoBehaviour
 {
     // Serialized fields
+    public battleController battleController;
     public RectTransform menuTransform;
     public GameObject ButtonHolder;
     public GameObject menu;
@@ -25,67 +26,42 @@ public class MenuController : MonoBehaviour
     public Transform categoryContent;
     public Transform content;
     public int selectedButtonIndex = 0;
+    public Color selectedColor;
     private int previouslySelectedButtonIndex = 0;
     private int selectedCategoryButtonIndex = 0;
     private int selectedItemsButtonIndex = 0;
+    private int selectedEnemyIndex = 0;
+    private string itemOrAttackName;
     private Vector3 originalScale;
     private bool isBattleOver;
     private bool playerturn;
+    private bool mutlipleAttacks = false;
+    private GameObject[] enemies;
+    private bool All = false;
+    private Dictionary<GameObject, Color> originalColors = new Dictionary<GameObject, Color>();
 
-//The buttons you can press
+    //The buttons you can press
 
-private List<GameObject> Catbuttons = new List<GameObject>();
-private List<GameObject> buttons = new List<GameObject>();
-private List<GameObject> itemButtons = new List<GameObject>();
+    private List<GameObject> Catbuttons = new List<GameObject>();
+    private List<GameObject> buttons = new List<GameObject>();
+    private List<GameObject> itemButtons = new List<GameObject>();
 
-// Lists for categorized items
-private List<Attacks> statusMoves = new List<Attacks>();
-private List<Attacks> damagingMoves = new List<Attacks>();
-private List<Attacks> collectedMoves = new List<Attacks>();
-private List<Item> collectedItems = new List<Item>();
+    // Lists for categorized items
+    private List<Move> statusMoves = new List<Move>();
+    private List<Move> damagingMoves = new List<Move>();
+    private List<Move> collectedMoves = new List<Move>();
+    public List<Item> collectedItems = new List<Item>();
 
 
     [System.Serializable]
     private class ItemData
     {
-        public List<Attacks> collectedMoves;
+        public List<Move> collectedMoves;
         public List<Item> collectedItems;
     }
 
     private void Start()
     {
-        if(PlayerPrefs.GetInt("firstTime") == 1)
-        {
-            //clear collected moves and items
-            collectedMoves.Clear();
-            collectedItems.Clear();
-            SaveData();
-        }
-        else
-        {
-            LoadData();
-        }
-
-        // //create 3 sets of items to go into the players items
-        // Item potion = new Item();  
-        // potion.name = "Evil Potion";
-        // potion.itemType = "Damaging";
-        // potion.damageAmount = 20;
-        
-        // Item superPotion = new Item();
-        // superPotion.name = "Super Potion";
-        // superPotion.itemType = "Status";
-        // superPotion.damageAmount = 50;
-
-        // Item hyperPotion = new Item();
-        // hyperPotion.name = "Hyper Potion";
-        // hyperPotion.itemType = "Status";
-        // hyperPotion.damageAmount = 200;
-        // //add the items to the list of items
-        // collectedItems.Add(potion);
-        // collectedItems.Add(superPotion);
-        // collectedItems.Add(hyperPotion);
-
         //put the 3 buttons, attack, items and flee that exist already as Buttons into the list of buttons
         buttons.Add(GameObject.Find("Battle_button"));
         buttons.Add(GameObject.Find("Items_button"));
@@ -102,22 +78,23 @@ private List<Item> collectedItems = new List<Item>();
 
     public void SaveData()
     {
+        BinaryFormatter bf = new BinaryFormatter();
+        FileStream file = File.Create(Application.persistentDataPath + "/itemMenu.dat");
+
         ItemData data = new ItemData();
         data.collectedMoves = collectedMoves;
         data.collectedItems = collectedItems;
 
-        BinaryFormatter bf = new BinaryFormatter();
-        FileStream file = File.Create(Application.persistentDataPath + "/itemsMenu.dat");
         bf.Serialize(file, data);
         file.Close();
     }
 
-    private void LoadData()
+    public void LoadData()
     {
-        if (File.Exists(Application.persistentDataPath + "/itemsMenu.dat"))
+        if (File.Exists(Application.persistentDataPath + "/itemMenu.dat"))
         {
             BinaryFormatter bf = new BinaryFormatter();
-            FileStream file = File.Open(Application.persistentDataPath + "/itemsMenu.dat", FileMode.Open);
+            FileStream file = File.Open(Application.persistentDataPath + "/itemMenu.dat", FileMode.Open);
             ItemData data = (ItemData)bf.Deserialize(file); // Change SaveItemData to ItemData
             // Update your properties with the deserialized data
             collectedMoves = data.collectedMoves;
@@ -180,6 +157,8 @@ private List<Item> collectedItems = new List<Item>();
     // Slide the menu up
     public void SlideMenuUp()
     {
+        //stop all coroutines
+        StopAllCoroutines();
         Vector3 endPos = new Vector3(0, 0, 0);
         StartCoroutine(SlideMenu(endPos));
     }
@@ -187,9 +166,6 @@ private List<Item> collectedItems = new List<Item>();
     // Slide the menu down
     public void SlideMenuDown()
     {
-        itemsMenu.SetActive(false);
-        categoryMenu.SetActive(false);
-        Catbuttons.Clear();
         Vector3 endPos = new Vector3(0, -875, 0); // adjust the y value to the desired end position
         StartCoroutine(SlideMenu(endPos));
     }
@@ -198,6 +174,20 @@ private List<Item> collectedItems = new List<Item>();
     public void ResetMenu()
     {
         menuTransform.localPosition = new Vector3(0, -875, 0);
+    }
+
+    public void updateDictionary()
+    {
+        //clear the dictionary
+        originalColors.Clear();
+        //get the enemies
+        enemies = battleController.getEnemyArray();
+        //loop through the enemies
+        foreach (GameObject enemy in enemies)
+        {
+            //add the enemy and its original material color to the dictionary
+            originalColors.Add(enemy, enemy.GetComponent<SpriteRenderer>().material.color);
+        }
     }
 
     private void Update()
@@ -210,7 +200,7 @@ private List<Item> collectedItems = new List<Item>();
         // Move up (if applicable)
         if (Input.GetKeyDown(KeyCode.W))
         {
-            if (categoryMenu.activeSelf == false)
+            if (categoryMenu.activeSelf == false  && mutlipleAttacks == false)
             {
                 previouslySelectedButtonIndex = selectedButtonIndex;
                 selectedButtonIndex--;
@@ -222,7 +212,7 @@ private List<Item> collectedItems = new List<Item>();
                 buttons[selectedButtonIndex].GetComponent<Button>().Select();
                 buttons[selectedButtonIndex].transform.localScale *= 1.1f; // Increase size by 10%
             }
-            else if (categoryMenu.activeSelf == true && itemsMenu.activeSelf == false)
+            else if (categoryMenu.activeSelf == true && itemsMenu.activeSelf == false  && mutlipleAttacks == false)
             {
                 previouslySelectedButtonIndex = selectedCategoryButtonIndex;
                 selectedCategoryButtonIndex--;
@@ -234,10 +224,8 @@ private List<Item> collectedItems = new List<Item>();
                 Catbuttons[selectedCategoryButtonIndex].GetComponent<Button>().Select();
                 Catbuttons[selectedCategoryButtonIndex].transform.localScale *= 1.1f; // Increase size by 10%
             }
-            else
+            else if (categoryMenu.activeSelf == true && itemsMenu.activeSelf == true && mutlipleAttacks == false)
             {   
-                //print the itembutton count 
-
                 previouslySelectedButtonIndex = selectedItemsButtonIndex;
                 selectedItemsButtonIndex--;
                 if (selectedItemsButtonIndex < 0)
@@ -248,11 +236,24 @@ private List<Item> collectedItems = new List<Item>();
                 itemButtons[selectedItemsButtonIndex].GetComponent<Button>().Select();
                 itemButtons[selectedItemsButtonIndex].transform.localScale *= 1.1f; // Increase size by 10%
             }
+            else if (mutlipleAttacks == true)
+            {
+                //COME BACK #1
+                GameObject previousEnemy = enemies[selectedEnemyIndex];
+                previousEnemy.GetComponent<Renderer>().material.color = originalColors[previousEnemy];
+                selectedEnemyIndex++;
+                if (selectedEnemyIndex >= enemies.Length)
+                {
+                    selectedEnemyIndex = 0;
+                }
+                GameObject selectedEnemy = enemies[selectedEnemyIndex];
+                selectedEnemy.GetComponent<Renderer>().material.color = selectedColor;
+            }
         }
         // Move down (if applicable)
         else if (Input.GetKeyDown(KeyCode.S))
         {
-            if (categoryMenu.activeSelf == false)
+            if (categoryMenu.activeSelf == false && mutlipleAttacks == false)
             {
                 previouslySelectedButtonIndex = selectedButtonIndex;
                 selectedButtonIndex++;
@@ -264,10 +265,10 @@ private List<Item> collectedItems = new List<Item>();
                 buttons[selectedButtonIndex].GetComponent<Button>().Select();
                 buttons[selectedButtonIndex].transform.localScale *= 1.1f; // Increase size by 10%
             }
-            else if (categoryMenu.activeSelf == true && itemsMenu.activeSelf == false)
+            else if (categoryMenu.activeSelf == true && itemsMenu.activeSelf == false && mutlipleAttacks == false)
             {
                 previouslySelectedButtonIndex = selectedCategoryButtonIndex;
-                selectedCategoryButtonIndex++;
+                selectedCategoryButtonIndex++; 
                 if (selectedCategoryButtonIndex >= Catbuttons.Count)
                 {
                     selectedCategoryButtonIndex = 0;
@@ -276,24 +277,46 @@ private List<Item> collectedItems = new List<Item>();
                 Catbuttons[selectedCategoryButtonIndex].GetComponent<Button>().Select();
                 Catbuttons[selectedCategoryButtonIndex].transform.localScale *= 1.1f; // Increase size by 10%
             }
-            else
+            else if (categoryMenu.activeSelf == true && itemsMenu.activeSelf == true  && mutlipleAttacks == false)
             {
                 previouslySelectedButtonIndex = selectedItemsButtonIndex;
                 selectedItemsButtonIndex++;
                 if (selectedItemsButtonIndex >= itemButtons.Count)
                 {
-                    selectedItemsButtonIndex = itemButtons.Count - 1;
+                    selectedItemsButtonIndex = 0;
                 }
                 itemButtons[previouslySelectedButtonIndex].transform.localScale = originalScale; // Reset previous button size
                 itemButtons[selectedItemsButtonIndex].GetComponent<Button>().Select();
                 itemButtons[selectedItemsButtonIndex].transform.localScale *= 1.1f; // Increase size by 10%
             }
+            else if (mutlipleAttacks == true)
+            {
+                GameObject previousEnemy = enemies[selectedEnemyIndex];
+                previousEnemy.GetComponent<Renderer>().material.color = originalColors[previousEnemy];
+                selectedEnemyIndex--;
+                if (selectedEnemyIndex < 0)
+                {
+                    selectedEnemyIndex = enemies.Length - 1;
+                }
+                GameObject selectedEnemy = enemies[selectedEnemyIndex];
+                selectedEnemy.GetComponent<Renderer>().material.color = selectedColor;
+            }
         }
         //press escape
         else if (Input.GetKeyDown(KeyCode.Escape))
         {
-            //if the category menu is open then close it
-            if (categoryMenu.activeSelf == true && itemsMenu.activeSelf == false)
+            if (mutlipleAttacks == true)
+            {
+                //set all selectedindex to 0
+                itemsMenu.SetActive(true);
+                categoryMenu.SetActive(true);
+                GameObject previousEnemy = enemies[selectedEnemyIndex];
+                previousEnemy.GetComponent<Renderer>().material.color = originalColors[previousEnemy];
+                SlideMenuUp();
+                selectedEnemyIndex = 0;
+                mutlipleAttacks = false;
+            }
+            else if (categoryMenu.activeSelf == true && itemsMenu.activeSelf == false)
             {
                 categoryMenu.SetActive(false);
                 previouslySelectedButtonIndex = selectedButtonIndex;
@@ -311,11 +334,20 @@ private List<Item> collectedItems = new List<Item>();
                 {
                     itemButtons[selectedItemsButtonIndex].transform.localScale = originalScale;
                 }
+                //set the category button prefab to the white material color
             }
         }
         else if (Input.GetKeyDown(KeyCode.Return))
         {
-            if (categoryMenu.activeSelf == false)
+            if (mutlipleAttacks == true)
+            {
+                GameObject previousEnemy = enemies[selectedEnemyIndex];
+                previousEnemy.GetComponent<SpriteRenderer>().material.color = originalColors[previousEnemy];
+                attackSelectedEnemy(selectedEnemyIndex);
+                selectedEnemyIndex = 0;
+                mutlipleAttacks = false;
+            }
+            else if (categoryMenu.activeSelf == false)
             {
                 selectedCategoryButtonIndex = 0;
                 previouslySelectedButtonIndex = 0;
@@ -372,7 +404,7 @@ private List<Item> collectedItems = new List<Item>();
         itemsMenu.SetActive(false);
     }   
 
-    public void receiveAtkMoves(List<Attacks> moves)
+    public void receiveAtkMoves(List<Move> moves)
     {
         foreach (Transform child in content)
         {
@@ -383,11 +415,16 @@ private List<Item> collectedItems = new List<Item>();
             Destroy(child.gameObject);
         }
 
+        foreach (Move move in moves)
+        {
+            Debug.Log("moveType: " + move.type + " moveName: " + move.name);
+        }
+
         Catbuttons.Clear();
         itemButtons.Clear();
 
-        // Create a loop to go through each move in the list.
-        foreach (Attacks move in moves)
+        //iterate through each move in Move
+        foreach (Move move in moves)
         {
             string moveType = move.type;
             string moveName = move.name;
@@ -400,10 +437,11 @@ private List<Item> collectedItems = new List<Item>();
             }
 
             // Create a new Move object.
-            Attacks newMove = new Attacks
+            Move newMove = new Move
             {
                 name = moveName,
                 type = moveType,
+                target = move.target,
             };
 
             collectedMoves.Add(newMove);
@@ -496,32 +534,44 @@ private List<Item> collectedItems = new List<Item>();
     }
 
     // Define the method for generating buttons from a list of items
-    private IEnumerator GenerateItemButtons(List<Item> items)
+    private void GenerateItemButtons(List<Item> items)
     {
-        itemsMenu.SetActive(true);
         foreach (Transform child in content)
         {
             Destroy(child.gameObject);
         }
         itemButtons.Clear();
+
         foreach(Item item in items)
         {
             Button buttonObject = Instantiate(itemPrefab, content);
             buttonObject.GetComponentInChildren<TextMeshProUGUI>().text = item.name;
             itemButtons.Add(buttonObject.gameObject);
             buttonObject.onClick.AddListener(() => {
+                itemOrAttackName = item.name;
+                enemies = battleController.getEnemyArray();
+                SlideMenuDown();
                 itemsMenu.SetActive(false);
                 categoryMenu.SetActive(false);
-                SlideMenuDown();
-                //implement something to do with the item when you get the chance.
-                player.GetComponent<SpriteMovement>().playerAttackMove(item.name, true, item.itemType, item.damageAmount, item.target);
-                playerturn = false;
 
-                //delete the item from the list of items
-                collectedItems.Remove(item);
+                if (item.target == "All" || PlayerPrefs.GetInt("totalEnemies") == 1){
+                    Catbuttons.Clear();
+                    itemButtons.Clear();
+                    All = true;
+                    attackSelectedEnemy(0);
+                }
+                else
+                {
+                    All = false;
+                    GameObject selectedEnemy = enemies[selectedEnemyIndex];
+                    selectedEnemy.GetComponent<Renderer>().material.color = selectedColor;
+                    StartCoroutine(DelayedExecution());
+                }
             });
         }
-        yield return null;
+        itemsMenu.SetActive(true);
+        itemsMenu.GetComponentInChildren<Button>().Select();
+        itemButtons[0].transform.localScale *= 1.1f;
     }
 
     private void UpdateAttackMenu()
@@ -539,18 +589,20 @@ private List<Item> collectedItems = new List<Item>();
         // Add the damaging moves category to the attack menu
         Button damagingButton = Instantiate(categoryPrefab, categoryContent);
         damagingButton.GetComponentInChildren<TextMeshProUGUI>().text = "Damaging Moves";
-        damagingButton.onClick.AddListener(() => {GenerateAttackButtons(damagingMoves); itemsMenu.SetActive(true);});
+        damagingButton.onClick.AddListener(() => {GenerateAttackButtons(damagingMoves); itemsMenu.SetActive(true);itemsMenu.GetComponentInChildren<Button>().Select();
+        itemButtons[0].transform.localScale *= 1.1f;});
         Catbuttons.Add(damagingButton.gameObject);
 
         // Add the status moves category to the attack menu
         Button statusButton = Instantiate(categoryPrefab, categoryContent);
         statusButton.GetComponentInChildren<TextMeshProUGUI>().text = "Status Moves";
-        statusButton.onClick.AddListener(() => {GenerateAttackButtons(statusMoves); itemsMenu.SetActive(true);});
+        statusButton.onClick.AddListener(() => {GenerateAttackButtons(statusMoves); itemsMenu.SetActive(true); itemsMenu.GetComponentInChildren<Button>().Select();
+        itemButtons[0].transform.localScale *= 1.1f;});
         Catbuttons.Add(statusButton.gameObject);
     }
 
     // Define the method for generating buttons from a list of attacks
-    private void GenerateAttackButtons(List<Attacks> attacks)
+    private void GenerateAttackButtons(List<Move> attacks)
     {
         // Clear any existing buttons in the ItemsMenu area
 
@@ -575,7 +627,7 @@ private List<Item> collectedItems = new List<Item>();
         }
 
         // // Generate a button for each attack in the list
-        foreach (Attacks attack in attacks)
+        foreach (Move attack in attacks)
         {
             // Create a new button object
             Button buttonObject = Instantiate(itemPrefab, content);
@@ -588,17 +640,27 @@ private List<Item> collectedItems = new List<Item>();
 
             // Add an onClick listener to the button
             buttonObject.onClick.AddListener(() => {
-                // Handle the button click event
-                itemsMenu.SetActive(false);
+                itemOrAttackName = attack.name;
+                enemies = battleController.getEnemyArray();
                 SlideMenuDown();
-                player.GetComponent<SpriteMovement>().playerAttackMove(attack.name, false, "", 0f, "");
-                playerturn = false;
+                itemsMenu.SetActive(false);
+                categoryMenu.SetActive(false);
+
+                if (attack.target == "All" || PlayerPrefs.GetInt("totalEnemies") == 1){
+                    Catbuttons.Clear();
+                    itemButtons.Clear();
+                    All = true;
+                    attackSelectedEnemy(0);
+                }
+                else 
+                {
+                    All = false;
+                    GameObject selectedEnemy = enemies[selectedEnemyIndex];
+                    selectedEnemy.GetComponent<Renderer>().material.color = selectedColor;
+                    StartCoroutine(DelayedExecution());
+                }
             });
         }
-
-        //Select the first button in the list
-        itemsMenu.GetComponentInChildren<Button>().Select();
-        itemButtons[0].transform.localScale *= 1.1f;
     }
     public void BattleOver(int EnemyLevel)
     {
@@ -648,6 +710,9 @@ private List<Item> collectedItems = new List<Item>();
 
         //set the text of the end battle screen
         EndBattleScreen.GetComponentInChildren<TextMeshProUGUI>().text = message;
+
+        SettingsMenu settingsMenu = GameObject.Find("SettingsMenu").GetComponent<SettingsMenu>();
+        settingsMenu.turnOffOn(false);
    }
 
    //when enter is pressed and the cotinue button is selected
@@ -684,23 +749,39 @@ private List<Item> collectedItems = new List<Item>();
         //add the item to the list of items
         collectedItems.Add(item);
     }
+
+    private void attackSelectedEnemy(int index)
+    {
+        selectedButtonIndex = 0; 
+        previouslySelectedButtonIndex = 0;
+        selectedCategoryButtonIndex = 0;
+        //reset the buttons and set all the selected values to 0
+        foreach (Transform child in content)
+        {
+            Destroy(child.gameObject);
+        }
+        foreach (Transform child in categoryContent)
+        {
+            Destroy(child.gameObject);
+        }
+        Catbuttons.Clear();
+        itemButtons.Clear();
+
+        mutlipleAttacks = false;
+        playerturn = false;
+        battleController.setAttackUp(index, itemOrAttackName, All);
+    }
+
+    IEnumerator DelayedExecution()
+    {
+        yield return new WaitForSeconds(0.01f);
+        mutlipleAttacks = true;
+    }
 }
 
 [System.Serializable]
-public class Item
+public class ItemData
 {
-    public string name;
-    public string itemType;
-    public float damageAmount;
-    public string target;
-}
-[System.Serializable]
-public class Attacks
-{
-    public string name;
-    public string type;
-    public int dmg;
-    public int accuracy;
-    public int hits;
-    public int heal;
+    public List<Move> collectedMoves;
+    public List<Item> collectedItems;
 }
